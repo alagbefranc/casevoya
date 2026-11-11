@@ -53,6 +53,28 @@ function ipv6Groups(address: string): number[] | null {
   return all.map((group) => Number.parseInt(group, 16));
 }
 
+/**
+ * The visitor address Supabase Auth should see, from Cloudflare only.
+ * cf-connecting-ip is set by the edge and replaces a value the client sent.
+ * x-forwarded-for and x-real-ip are ignored here: the client can write those,
+ * and Auth per-IP limits must not follow them. An absent or invalid value
+ * means no header, so Auth sees the connection address (the right result in local dev).
+ */
+export function cloudflareConnectingIp(headers: HeaderSource): string | null {
+  const raw = headers.get("cf-connecting-ip");
+  if (!raw) return null;
+  const first = raw.split(",")[0]?.trim() ?? "";
+  return isIpAddress(first) ? first : null;
+}
+
+/** Header GoTrue reads once security_sb_forwarded_for_enabled is turned on. Not enabled here. */
+export const SB_FORWARDED_FOR = "sb-forwarded-for";
+
+export function supabaseAuthForwardHeaders(headers: HeaderSource): Record<string, string> {
+  const ip = cloudflareConnectingIp(headers);
+  return ip ? { [SB_FORWARDED_FOR]: ip } : {};
+}
+
 export function isIpAddress(value: string): boolean {
   if (/^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(value)) return true;
   if (value.length > 45 || !value.includes(":") || !/^[0-9A-Fa-f:.]+$/.test(value)) return false;

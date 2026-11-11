@@ -1,24 +1,57 @@
 import { isEmbeddablePath } from "@/lib/security/framing";
 
 /**
- * The app-wide Content Security Policy, set by the proxy on every page (not on /api routes, which
- * answer JSON or set their own stricter policy).
+ * Content-Security-Policy for pages, set by the proxy.
  *
- * - Enforced: `object-src 'none'; base-uri 'self'`, added to the framing policy. No page uses
- *   <object>, <embed> or <base>, so these change nothing for the app.
- * - Report-only: the full allowlist of what the app loads (Next.js inline scripts, Stripe
- *   Elements and Connect embedded components, Supabase REST/Realtime, LiveKit). Violations are
- *   reported in the browser console; nothing is blocked until it is promoted to enforced.
- *   frame-ancestors follows the framing rules (src/lib/security/framing.ts): `*` on the embedded
- *   enquiry form, `'self'` everywhere else.
+ * Nonces are not used. Next can stamp a per-request nonce onto its own inline scripts when the
+ * proxy sets an `x-nonce` request header, but that does not work in this app:
+ *
+ * 1. The non-Workers build turns on Cache Components (`cacheComponents` in next.config.ts).
+ *    A nonce has to be unique per response and present both in the header and in the HTML.
+ *    A cached shell would keep a nonce that does not match the next request's header, and
+ *    the browser would block the page's scripts.
+ * 2. Production is OpenNext on Cloudflare. find.casevoya.ca is prebuilt HTML from the ASSETS
+ *    binding (`rewriteFindHost` in src/lib/supabase/proxy.ts), with a same-origin `app.js` and
+ *    no per-request nonce. A nonce `script-src` on that response would block the page.
+ * 3. Stripe is injected at runtime without a nonce we control. `loadStripe`
+ *    (src/components/portal/pay-live.tsx) inserts https://js.stripe.com, and
+ *    `loadConnectAndInitialize` (src/components/sheet/stripe-connect.tsx) inserts
+ *    https://connect-js.stripe.com. `'strict-dynamic'` would ignore those host allowlists
+ *    unless the inserting script itself carried a nonce, which the cached and static HTML
+ *    cannot do.
+ * 4. LiveKit does not load a remote script (`livekit-client` is bundled). It needs
+ *    `connect-src` for its websocket. A nonce would not help it, and a broken script policy
+ *    would still take down the call page's Next scripts.
+ *
+ * The full allowlist, including `script-src` with `'unsafe-inline'` and the Stripe hosts, is
+ * sent as Content-Security-Policy-Report-Only unless CSP_ENFORCE=1. Report-only does not block.
+ * `frame-ancestors` is ignored in a report-only policy, so a separate enforced
+ * Content-Security-Policy carries only that directive: `*` on the embedded enquiry form and
+ * `'self'` everywhere else, including API responses. X-Frame-Options stays SAMEORIGIN except
+ * on that embed. CSP_ENFORCE=1 moves the full policy onto the enforced header.
+ *
+ * Sources checked against the app: Next and the find page are `'self'` (public/find/index.html
+ * loads `app.js`). Stripe.js and Connect are the hosts below. Supabase REST and Realtime are
+ * the project URL and its websocket twin. LiveKit is LIVEKIT_URL plus `*.livekit.cloud`.
+ * pdf.js is `/pdfjs/pdf.worker.min.mjs` (`worker-src 'self'`). Turnstile
+ * (`https://challenges.cloudflare.com`) is added only when NEXT_PUBLIC_TURNSTILE_SITE_KEY is set.
  */
-
-export const ENFORCED_CSP = "object-src 'none'; base-uri 'self'";
 
 const STRIPE_SCRIPTS = ["https://js.stripe.com", "https://*.js.stripe.com", "https://connect-js.stripe.com"];
 const STRIPE_FRAMES = ["https://js.stripe.com", "https://*.js.stripe.com", "https://hooks.stripe.com", "https://connect-js.stripe.com"];
 const STRIPE_CONNECT = ["https://api.stripe.com", "https://connect-js.stripe.com", "https://*.stripe.com"];
 const LIVEKIT_CLOUD = ["wss://*.livekit.cloud", "https://*.livekit.cloud"];
+const TURNSTILE = "https://challenges.cloudflare.com";
+
+/** Reports land here. Browsers post them without a reliable Origin. */
+export const CSP_REPORT_PATH = "/api/csp-report";
+export const CSP_REPORT_GROUP = "csp";
+export const REPORTING_ENDPOINTS = `${CSP_REPORT_GROUP}="${CSP_REPORT_PATH}"`;
+
+/** CSP_ENFORCE=1 sends the full policy as Content-Security-Policy. Any other value is report-only. */
+export function cspEnforced(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CSP_ENFORCE === "1";
+}
 
 export type CspEnv = {
   /** NEXT_PUBLIC_SUPABASE_URL. */
@@ -27,10 +60,17 @@ export type CspEnv = {
   liveKitUrl?: string;
   /** Development: Next's dev overlay and fast refresh use eval. */
   dev?: boolean;
+  /** NEXT_PUBLIC_TURNSTILE_SITE_KEY is set, so the challenge script may load. */
+  turnstile?: boolean;
 };
 
 export function cspEnv(): CspEnv {
-  return { supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL, liveKitUrl: process.env.LIVEKIT_URL, dev: process.env.NODE_ENV === "development" };
+  return {
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    liveKitUrl: process.env.LIVEKIT_URL,
+    dev: process.env.NODE_ENV === "development",
+    turnstile: Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()),
+  };
 }
 
 /** The http(s) origin and its ws(s) twin, or none for a missing or malformed URL. */
@@ -47,9 +87,11 @@ function originPair(raw: string | undefined): string[] {
   }
 }
 
-export function reportOnlyCsp(pathname: string, env: CspEnv = cspEnv()): string {
-  const scripts = ["'self'", "'unsafe-inline'", ...(env.dev ? ["'unsafe-eval'"] : []), ...STRIPE_SCRIPTS];
-  const connect = ["'self'", ...originPair(env.supabaseUrl), ...originPair(env.liveKitUrl), ...LIVEKIT_CLOUD, ...STRIPE_CONNECT];
+export function contentSecurityPolicy(pathname: string, env: CspEnv = cspEnv()): string {
+  const turnstile = env.turnstile ? [TURNSTILE] : [];
+  const scripts = ["'self'", "'unsafe-inline'", ...(env.dev ? ["'unsafe-eval'"] : []), ...STRIPE_SCRIPTS, ...turnstile];
+  const connect = ["'self'", ...originPair(env.supabaseUrl), ...originPair(env.liveKitUrl), ...LIVEKIT_CLOUD, ...STRIPE_CONNECT, ...turnstile];
+  const frames = ["'self'", ...STRIPE_FRAMES, ...turnstile];
   const directives = [
     "default-src 'self'",
     `script-src ${scripts.join(" ")}`,
@@ -59,24 +101,50 @@ export function reportOnlyCsp(pathname: string, env: CspEnv = cspEnv()): string 
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
     `connect-src ${[...new Set(connect)].join(" ")}`,
-    `frame-src 'self' ${STRIPE_FRAMES.join(" ")}`,
+    `frame-src ${frames.join(" ")}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
     `frame-ancestors ${isEmbeddablePath(pathname) ? "*" : "'self'"}`,
+    `report-uri ${CSP_REPORT_PATH}`,
+    `report-to ${CSP_REPORT_GROUP}`,
   ];
   return directives.join("; ");
 }
+
+/** @deprecated The policy is report-only by default. Kept so older imports still name the same allowlist. */
+export const reportOnlyCsp = contentSecurityPolicy;
 
 function isApiPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/");
 }
 
-/** Adds the enforced baseline to the response's policy (after applyFraming) and the report-only policy. */
+/** Enforced clickjacking directive. Report-only policies ignore frame-ancestors. */
+export function enforcedFrameAncestors(pathname: string): string {
+  if (!isApiPath(pathname) && isEmbeddablePath(pathname)) return "frame-ancestors *";
+  return "frame-ancestors 'self'";
+}
+
+/**
+ * Pages: the full allowlist is report-only, and the enforced header is only frame-ancestors.
+ * CSP_ENFORCE=1 moves that same allowlist onto Content-Security-Policy.
+ * API responses are not documents: they get frame-ancestors and no script policy.
+ */
 export function applyContentSecurityPolicy(headers: Headers, pathname: string, env: CspEnv = cspEnv()): void {
-  if (isApiPath(pathname)) return;
-  const current = headers.get("Content-Security-Policy");
-  if (!current) headers.set("Content-Security-Policy", ENFORCED_CSP);
-  else if (!/(^|;)\s*object-src\b/.test(current)) headers.set("Content-Security-Policy", `${current}; ${ENFORCED_CSP}`);
-  headers.set("Content-Security-Policy-Report-Only", reportOnlyCsp(pathname, env));
+  const ancestors = enforcedFrameAncestors(pathname);
+  if (isApiPath(pathname)) {
+    headers.set("Content-Security-Policy", ancestors);
+    headers.delete("Content-Security-Policy-Report-Only");
+    headers.delete("Reporting-Endpoints");
+    return;
+  }
+  const policy = contentSecurityPolicy(pathname, env);
+  headers.set("Reporting-Endpoints", REPORTING_ENDPOINTS);
+  if (cspEnforced()) {
+    headers.set("Content-Security-Policy", policy);
+    headers.delete("Content-Security-Policy-Report-Only");
+    return;
+  }
+  headers.set("Content-Security-Policy", ancestors);
+  headers.set("Content-Security-Policy-Report-Only", policy);
 }

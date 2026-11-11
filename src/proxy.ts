@@ -1,14 +1,17 @@
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
-import { applyFraming } from "@/lib/security/framing";
 import { applyContentSecurityPolicy } from "@/lib/security/csp";
+import { applyFraming } from "@/lib/security/framing";
+import { applySecurityHeaders } from "@/lib/security/headers";
 
 export async function proxy(request: NextRequest) {
   const response = await updateSession(request);
+  const pathname = request.nextUrl.pathname;
   // Only a firm's embedded enquiry form may be framed by another site.
-  applyFraming(response.headers, request.nextUrl.pathname);
-  // App-wide CSP for pages: a small enforced baseline plus the full policy in report-only mode.
-  applyContentSecurityPolicy(response.headers, request.nextUrl.pathname);
+  applyFraming(response.headers, pathname);
+  // Full CSP is report-only unless CSP_ENFORCE=1. frame-ancestors stays enforced.
+  applyContentSecurityPolicy(response.headers, pathname);
+  applySecurityHeaders(response.headers, pathname);
   return response;
 }
 

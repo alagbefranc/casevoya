@@ -37,6 +37,7 @@ import {
 } from "@/app/auth/port-actions";
 import { mfaResetSentCopy } from "@/modules/auth/mfa-reset-copy";
 import { toast2 } from "./kit";
+import { readTurnstileToken } from "./turnstile";
 import { writeInviteBadge } from "./invite-badge";
 import { showSignupEmail } from "./signup-email";
 import type { PortEvent, PortResult } from "./use-port";
@@ -545,7 +546,7 @@ export function usePortActions(page: string, token?: string) {
       const el = event.el;
       if (page === "sign-in" && el.dataset.href === "/mfa") {
         const next = safeRedirect(new URLSearchParams(location.search).get("next"));
-        return signInWithPassword(val(event.root, "em"), val(event.root, "pw"), next);
+        return signInWithPassword(val(event.root, "em"), val(event.root, "pw"), next, readTurnstileToken(event.root));
       }
       if (page === "sign-in" && el.dataset.go === "1" && session.configured) {
         const supabase = createClient();
@@ -583,6 +584,7 @@ export function usePortActions(page: string, token?: string) {
           name: val(event.root, "nm"),
           email: val(event.root, "wem"),
           password: val(event.root, "tpw"),
+          captchaToken: readTurnstileToken(event.root),
         });
         // #330: a reload on "Confirm your email" comes back to the code step for this address.
         if (signedUp?.ok) {
@@ -613,7 +615,7 @@ export function usePortActions(page: string, token?: string) {
         return created;
       }
       if (page === "recovery" && el.hasAttribute("data-next") && event.step === 0) {
-        return sendRecoveryEmail(val(event.root, "rem"));
+        return sendRecoveryEmail(val(event.root, "rem"), readTurnstileToken(event.root));
       }
       if (page === "recovery" && el.hasAttribute("data-next") && event.step === 2) {
         return updatePassword(val(event.root, "np"), checked(event.root, "outall"));
