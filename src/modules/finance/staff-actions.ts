@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { stripeLive, stripeServer, stripeServerForMode } from "@/lib/stripe/server";
 import { isUuid } from "@/lib/tenant/context";
+import { logStripeFailure } from "@/modules/finance/stripe-error-log";
 import { accountCreateParams, ACCOUNT_SESSION_COMPONENTS, retrieveAccountStatus, syncStatusArgs } from "@/modules/finance/stripe-account";
 import { financeError, readNewInvoice, readRefund, refundError, type NewInvoiceFields, type RefundFields } from "@/modules/sheet/finance-present";
 import { creditError, readCredit, type CreditFields } from "@/modules/finance/credits-present";
@@ -298,7 +299,8 @@ export async function connectStripeAccount(input: { organizationId: string }): P
     );
     if (account.livemode !== live) return { error: WRONG_MODE };
     accountId = account.id;
-  } catch {
+  } catch (error) {
+    logStripeFailure({ operation: "connectStripeAccount", accountId: null, livemode: live, error });
     return { error: `Stripe didn’t create the account. Check the platform’s Connect settings in the Stripe ${live ? "live" : "test"} Dashboard.` };
   }
   const recorded = await supabase.rpc("record_firm_payment_account", { p_org: input.organizationId, p_account_id: accountId, p_livemode: live });
@@ -325,7 +327,8 @@ export async function createAccountSession(input: { organizationId: string }): P
     const created = await stripe.accountSessions.create({ account: account.data, components: ACCOUNT_SESSION_COMPONENTS });
     if (created.livemode !== live) return { error: WRONG_MODE };
     return { clientSecret: created.client_secret };
-  } catch {
+  } catch (error) {
+    logStripeFailure({ operation: "createAccountSession", accountId: account.data, livemode: live, error });
     return { error: "Stripe didn’t open the account session. Try again." };
   }
 }
@@ -346,7 +349,8 @@ export async function refreshStripeAccount(input: { organizationId: string }): P
     const { error } = await session.supabase.rpc("sync_firm_payment_account_status", syncStatusArgs(input.organizationId, row.data.account_id, status));
     if (error) return { error: financeError(error.message) };
     return { cardPayments: status.cardPayments };
-  } catch {
+  } catch (error) {
+    logStripeFailure({ operation: "refreshStripeAccount", accountId: row.data.account_id, livemode: live, error });
     return { error: "Stripe didn’t answer. Try again." };
   }
 }
