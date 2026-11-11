@@ -4,6 +4,7 @@ import type { MfaResetRoute } from "@/modules/auth/mfa-reset-copy";
 import type { Json } from "@/types/database.types";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { passwordOk } from "@/lib/auth/password";
+import { CAPTCHA_MESSAGE, captchaMissing, captchaOptions } from "@/lib/auth/turnstile";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { homeRoute } from "@/lib/auth/home-route";
 import { safeRedirect } from "@/lib/auth/redirect";
@@ -102,10 +103,11 @@ async function guardedPasswordSignIn(
   supabase: Awaited<ReturnType<typeof createClient>>,
   email: string,
   password: string,
+  captchaToken?: string | null,
 ): Promise<{ limited: number } | { limited?: undefined; error: AuthErrorLike | null }> {
   const gate = await reserveAuthAttempt("password", email);
   if (!gate.allowed) return { limited: gate.retryAfterSeconds };
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({ email, password, options: captchaOptions(captchaToken) });
   await resolveAuthAttempt(gate, invalidCredentials(error));
   return { error: error ?? null };
 }
@@ -209,15 +211,17 @@ export async function getAuthContext() {
   return { configured: true, signedIn: true, factorId, assured, email };
 }
 
-export async function signInWithPassword(email: string, password: string, next: string): Promise<PortResult | null> {
+export async function signInWithPassword(email: string, password: string, next: string, captchaToken?: string | null): Promise<PortResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   const clean = email.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean) || !password) {
     return fail("Email or password didn’t match", "error");
   }
+  // Length is not checked. An existing password can be shorter than the rule for new ones.
+  if (captchaMissing(captchaToken)) return fail(CAPTCHA_MESSAGE);
   if (!(await authAllowed())) return limited();
   const supabase = await createClient();
-  const signedIn = await guardedPasswordSignIn(supabase, clean, password);
+  const signedIn = await guardedPasswordSignIn(supabase, clean, password, captchaToken);
   if (signedIn.limited !== undefined) return limited(signedIn.limited);
   const { error } = signedIn;
   // #330: the right password for a sign-up that never confirmed its email goes back to the code
@@ -250,16 +254,17 @@ function portalDestination(dest: string): string {
   return safe === "/portal" || safe.startsWith("/portal/") || safe.startsWith("/portal?") ? safe : "/portal";
 }
 
-export async function sendRecoveryEmail(email: string): Promise<PortResult | null> {
+export async function sendRecoveryEmail(email: string, captchaToken?: string | null): Promise<PortResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   const clean = email.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return fail("Enter the email you use for Casevoya");
+  if (captchaMissing(captchaToken)) return fail(CAPTCHA_MESSAGE);
   const emailGate = await authEmailGate(clean);
   if (!emailGate.allowed) return limited(emailGate.retryAfterSeconds);
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: clean,
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: false, ...captchaOptions(captchaToken) },
   });
   await resolveAuthAttempt(emailGate, !error);
   if (error) return fail("We couldn’t send a code to that email.");
@@ -352,6 +357,7 @@ export async function signUpForTrial(input: {
   name: string;
   email: string;
   password: string;
+  captchaToken?: string | null;
 }): Promise<PortResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   const email = input.email.trim();
@@ -359,6 +365,7 @@ export async function signUpForTrial(input: {
   if (!name || !isAcceptableEmail(email) || !passwordOk(input.password)) {
     return fail("Check your name, email and password.");
   }
+  if (captchaMissing(input.captchaToken)) return fail(CAPTCHA_MESSAGE);
   if (!(await authAllowed())) return limited();
   const emailGate = await authEmailGate(email);
   if (!emailGate.allowed) return limited(emailGate.retryAfterSeconds);
@@ -371,6 +378,7 @@ export async function signUpForTrial(input: {
       // A confirmed sign-up with no firm yet lands on /start-trial, which asks only for the firm.
       // The configured app origin, never a request header.
       emailRedirectTo: `${appOrigin()}/auth/confirm?next=${encodeURIComponent("/start-trial")}`,
+      ...captchaOptions(input.captchaToken),
     },
   });
   await resolveAuthAttempt(emailGate, signUpEmailed({ data, error }));

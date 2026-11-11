@@ -5,7 +5,29 @@
  *   drop the flag (TLS may end before the app). Outside production, on for https and off for
  *   plain http, including localhost, where a Secure cookie is not stored.
  * - sameSite: lax (the email links and the OAuth-style redirects are top-level GETs).
- * - httpOnly stays off: the browser client reads the session (passkeys, realtime, wire.ts).
+ * - httpOnly stays off. @supabase/ssr's browser client in this app reads and writes the
+ *   session through document.cookie (src/lib/supabase/client.ts). An HttpOnly cookie is
+ *   invisible there, and a script cannot set the HttpOnly flag, so the browser client
+ *   would see no session and could not persist a new one.
+ *   What reads or writes it in the browser:
+ *   - src/lib/supabase/client.ts getAll/setAll via document.cookie (every browser client).
+ *   - src/components/port/wire.ts watchForLinkSession calls auth.getSession() to notice an
+ *     email-confirm session started in another tab.
+ *   - src/components/port/wire.ts and src/app/mfa/passkey-button.tsx call signInWithPasskey(),
+ *     which stores the new session through that cookie adapter.
+ *   - src/components/portal/documents-live.tsx, src/components/portal/own-upload.ts,
+ *     src/components/documents/staff-capture.tsx and src/components/sheet/gov-acts.ts build
+ *     a browser client to upload to a signed storage URL. The signed URL carries its own
+ *     token; the client still initialises auth from the cookie.
+ *   There is no realtime .channel() subscriber in this repo. The cookie comment used to
+ *   name realtime because the browser client is what would subscribe.
+ *   A migration to HttpOnly would keep the server client (cookies() can set HttpOnly) and
+ *   stop persisting sessions in the browser client. Passkey sign-in would have to hand the
+ *   new tokens to a route that sets the cookie. watchForLinkSession would poll that route
+ *   instead of getSession(). A later realtime client would call realtime.setAuth with a
+ *   token from the same route and refresh it before expiry. Existing non-HttpOnly cookies
+ *   would need one request through the server client to be rewritten. Until that exists,
+ *   setting httpOnly here would break passkey sign-in and the cross-tab email confirm.
  * - maxAge: 30 days instead of @supabase/ssr's fixed 400. The refresh token itself does not expire
  *   (supabase/config.toml sets no [auth.sessions] timebox or inactivity timeout), and the cookie is
  *   written again on every token refresh (hourly while in use), so only a browser unused for 30

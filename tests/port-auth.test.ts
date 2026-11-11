@@ -9,6 +9,12 @@ describe("auth password rules", () => {
     expect(passwordRules("password-is-long")).toEqual({ len: true, mix: true, known: false });
     expect(passwordOk("Harbour-view-19")).toBe(true);
     expect(passwordOk("casevoya-casevoya")).toBe(false);
+    // The floor stays 12. Supabase Auth's own minimum is 10 and is not lowered here.
+    expect(passwordRules("a".repeat(10)).len).toBe(false);
+    expect(passwordRules("a".repeat(11)).len).toBe(false);
+    expect(passwordRules("a".repeat(12)).len).toBe(true);
+    expect(passwordOk(`${"a".repeat(9)}1`)).toBe(false);
+    expect(passwordOk(`${"a".repeat(11)}1`)).toBe(true);
   });
 });
 

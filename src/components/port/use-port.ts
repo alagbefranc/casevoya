@@ -5,6 +5,7 @@ import { safeRedirect } from "@/lib/auth/redirect";
 import { countdownText, messageParts, secondsLeft } from "@/lib/auth/signup-errors";
 import { escapeHtml } from "@/lib/html";
 import { busyBtn, clearBtn, icon, k2Count, k2Slider, k2Spark, morphText, settleBtn, toast2, voPose } from "./kit";
+import { mountTurnstile } from "./turnstile";
 
 export type PortResult =
   /** `stay` keeps the person on this step (the step changed in place, e.g. a code was sent). */
@@ -526,6 +527,7 @@ export function usePort(
     }
 
     bindPw();
+    mountTurnstile(root);
     bindOtp();
     bindResend();
     bindOpts();

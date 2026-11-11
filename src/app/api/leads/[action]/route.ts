@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SAME_ORIGIN_ERROR, isSameOriginMutation } from "@/lib/security/origin";
 import { isLeadAction, runLeadAction } from "@/modules/leads/actions";
 
 /**
@@ -7,6 +8,8 @@ import { isLeadAction, runLeadAction } from "@/modules/leads/actions";
  * version comes back as 409 so the board can put a card back where it was.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ action: string }> }) {
+  // Cookie-authenticated staff writes. Same origin rule as the other mutations.
+  if (!isSameOriginMutation(request)) return NextResponse.json({ error: SAME_ORIGIN_ERROR }, { status: 403 });
   const { action } = await params;
   if (!isLeadAction(action)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   let body: unknown;

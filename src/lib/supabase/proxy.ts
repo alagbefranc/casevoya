@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
 import { hasPublicSupabaseEnv, getPublicSupabaseEnv } from "@/lib/env";
+import { supabaseAuthForwardHeaders } from "@/lib/security/client-address";
 import { authCookieOptions, authCookieSecure, capAuthCookie } from "@/lib/supabase/cookie-options";
 import { isGatedPath, signInLocation } from "@/lib/auth/redirect";
 import { isStaffArea, staffMfaRedirectPath } from "@/lib/auth/staff-session";
@@ -91,6 +92,11 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const search = request.nextUrl.search;
+  // Uptime probes must not depend on a session refresh or an auth redirect.
+  if (path === "/api/health") {
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  }
   const findHost = isFindHost(platformHost(request));
   const findRewritten = await rewriteFindHost(request, path, requestId);
   if (findRewritten) return findRewritten;
@@ -106,6 +112,7 @@ export async function updateSession(request: NextRequest) {
 
   const supabase = createServerClient<Database>(url, publishableKey, {
     auth: { experimental: { passkey: true } },
+    global: { headers: supabaseAuthForwardHeaders(request.headers) },
     cookieOptions: authCookieOptions(authCookieSecure(request.nextUrl.protocol, request.nextUrl.hostname)),
     cookies: {
       getAll() {

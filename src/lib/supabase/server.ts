@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import type { Database } from "@/types/database.types";
 import { getPublicSupabaseEnv } from "@/lib/env";
 import { tenantHeaders } from "@/lib/tenant/context";
+import { supabaseAuthForwardHeaders } from "@/lib/security/client-address";
 import { authCookieOptions, authCookieSecure, capAuthCookie } from "@/lib/supabase/cookie-options";
 
 type Options = {
@@ -13,8 +14,7 @@ type Options = {
 };
 
 /** Whether the session cookie is Secure. Production ignores client forwarding headers. */
-async function requestIsSecure(): Promise<boolean> {
-  const incoming = await headers();
+function requestIsSecure(incoming: Headers): boolean {
   const proto = incoming.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
   const host = (incoming.get("x-forwarded-host") ?? incoming.get("host") ?? "").split(",")[0]?.trim() ?? "";
   const hostname = host.startsWith("[") ? host.slice(0, host.indexOf("]") + 1) : host.replace(/:\d+$/, "");
@@ -28,12 +28,13 @@ async function requestIsSecure(): Promise<boolean> {
  */
 export async function createClient(options: Options = {}) {
   const cookieStore = await cookies();
+  const incoming = await headers();
   const { url, publishableKey } = getPublicSupabaseEnv();
-  const secure = await requestIsSecure();
+  const secure = requestIsSecure(incoming);
 
   return createServerClient<Database>(url, publishableKey, {
     auth: { experimental: { passkey: true } },
-    global: { headers: tenantHeaders(options.organizationId, options.requestId) },
+    global: { headers: { ...tenantHeaders(options.organizationId, options.requestId), ...supabaseAuthForwardHeaders(incoming) } },
     cookieOptions: authCookieOptions(secure),
     cookies: {
       getAll() {

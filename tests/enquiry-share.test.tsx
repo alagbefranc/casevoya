@@ -93,21 +93,23 @@ describe("framing", () => {
 
     const embedMissing = await proxy(new NextRequest("https://app.casevoya.ca/embed/enquiry/no-such-firm"));
     expect(embedMissing.status).toBe(404);
-    expect(embedMissing.headers.get("Content-Security-Policy")).toBe("frame-ancestors *; object-src 'none'; base-uri 'self'");
+    expect(embedMissing.headers.get("Content-Security-Policy")).toContain("frame-ancestors *");
+    expect(embedMissing.headers.get("Content-Security-Policy")).toContain("script-src");
 
     rpc.mockResolvedValue({ data: { firm_name: "Maple", firm_slug: "maple", practice: false, staff: false }, error: null });
     const found = await proxy(new NextRequest("https://app.casevoya.ca/embed/enquiry/maple"));
     expect(found.status).toBe(200);
-    expect(found.headers.get("Content-Security-Policy")).toBe("frame-ancestors *; object-src 'none'; base-uri 'self'");
-    expect(found.headers.get("Content-Security-Policy-Report-Only")).toContain("frame-ancestors *");
+    expect(found.headers.get("Content-Security-Policy")).toContain("frame-ancestors *");
+    expect(found.headers.get("Content-Security-Policy")).toContain("script-src");
+    expect(found.headers.get("Content-Security-Policy-Report-Only")).toBeNull();
     expect(found.headers.get("X-Frame-Options")).toBeNull();
     expect(found.headers.get("Cache-Control")).toBe("private, no-store");
     const hosted = await proxy(new NextRequest("https://app.casevoya.ca/enquiry/maple"));
     expect(hosted.status).toBe(200);
     expect(hosted.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
-    // Only the baseline is enforced; the hosted page is not framable by other sites.
-    expect(hosted.headers.get("Content-Security-Policy")).toBe("object-src 'none'; base-uri 'self'");
-    expect(hosted.headers.get("Content-Security-Policy-Report-Only")).toContain("frame-ancestors 'self'");
+    expect(hosted.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'self'");
+    expect(hosted.headers.get("Content-Security-Policy")).toContain("script-src");
+    expect(hosted.headers.get("Content-Security-Policy-Report-Only")).toBeNull();
 
     rpc.mockClear();
     const malformed = await proxy(new NextRequest("https://app.casevoya.ca/enquiry/Bad_Slug"));

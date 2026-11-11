@@ -1,11 +1,10 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ENFORCED_CSP, applyContentSecurityPolicy, reportOnlyCsp } from "@/lib/security/csp";
+import { applyContentSecurityPolicy, contentSecurityPolicy } from "@/lib/security/csp";
 import { applyFraming } from "@/lib/security/framing";
 import { AUTH_COOKIE_MAX_AGE, authCookieOptions, authCookieSecure, capAuthCookie } from "@/lib/supabase/cookie-options";
 
-// The app-wide CSP set by the proxy (report-only allowlist plus an enforced object-src/base-uri
-// baseline, framing rules kept) and the Supabase auth cookie settings.
+// The enforced page CSP (script-src included; no report-only header) and the auth cookie settings.
 
 const ssr = vi.hoisted(() => ({ options: [] as { cookieOptions?: Record<string, unknown> }[] }));
 vi.mock("@supabase/ssr", () => ({
@@ -32,54 +31,70 @@ afterEach(() => {
 });
 
 describe("Content-Security-Policy", () => {
-  it("report-only policy allows what the app loads and nothing broader", () => {
-    const policy = reportOnlyCsp("/sheet", ENV);
+  it("enforced policy allows what the app loads and nothing broader", () => {
+    const policy = contentSecurityPolicy("/sheet", ENV);
     expect(directive(policy, "default-src")).toBe("default-src 'self'");
+    expect(directive(policy, "script-src")).toContain("'self'");
+    expect(directive(policy, "script-src")).toContain("'unsafe-inline'");
     expect(directive(policy, "script-src")).toContain("https://js.stripe.com");
+    expect(directive(policy, "script-src")).toContain("https://connect-js.stripe.com");
     expect(directive(policy, "script-src")).not.toContain("'unsafe-eval'");
+    expect(directive(policy, "script-src")).not.toContain("challenges.cloudflare.com");
     expect(directive(policy, "connect-src")).toContain("https://proj.supabase.co");
     expect(directive(policy, "connect-src")).toContain("wss://proj.supabase.co");
     expect(directive(policy, "connect-src")).toContain("wss://casevoya.livekit.cloud");
     expect(directive(policy, "connect-src")).toContain("https://api.stripe.com");
+    expect(directive(policy, "frame-src")).toContain("https://hooks.stripe.com");
     expect(directive(policy, "img-src")).toBe("img-src 'self' data: blob: https:");
     expect(directive(policy, "object-src")).toBe("object-src 'none'");
     expect(directive(policy, "base-uri")).toBe("base-uri 'self'");
     expect(directive(policy, "form-action")).toBe("form-action 'self'");
     expect(directive(policy, "frame-ancestors")).toBe("frame-ancestors 'self'");
-    expect(directive(reportOnlyCsp("/sheet", { ...ENV, dev: true }), "script-src")).toContain("'unsafe-eval'");
-    expect(directive(reportOnlyCsp("/sheet", { liveKitUrl: "not a url" }), "connect-src")).not.toContain("not");
+    expect(directive(contentSecurityPolicy("/sheet", { ...ENV, dev: true }), "script-src")).toContain("'unsafe-eval'");
+    expect(directive(contentSecurityPolicy("/sheet", { liveKitUrl: "not a url" }), "connect-src")).not.toContain("not");
+    const withTurnstile = contentSecurityPolicy("/sign-in", { ...ENV, turnstile: true });
+    expect(directive(withTurnstile, "script-src")).toContain("https://challenges.cloudflare.com");
+    expect(directive(withTurnstile, "frame-src")).toContain("https://challenges.cloudflare.com");
+    expect(directive(withTurnstile, "connect-src")).toContain("https://challenges.cloudflare.com");
   });
 
-  it("keeps frame-ancestors * on the embedded enquiry form", () => {
+  it("keeps frame-ancestors * on the embedded enquiry form and enforces script-src", () => {
     const headers = new Headers();
     applyFraming(headers, "/embed/enquiry/maple");
     applyContentSecurityPolicy(headers, "/embed/enquiry/maple", ENV);
-    expect(headers.get("Content-Security-Policy")).toBe(`frame-ancestors *; ${ENFORCED_CSP}`);
+    const policy = headers.get("Content-Security-Policy") ?? "";
+    expect(directive(policy, "frame-ancestors")).toBe("frame-ancestors *");
+    expect(directive(policy, "script-src")).toContain("script-src");
     expect(headers.get("X-Frame-Options")).toBeNull();
-    expect(directive(headers.get("Content-Security-Policy-Report-Only") ?? "", "frame-ancestors")).toBe("frame-ancestors *");
+    expect(headers.get("Content-Security-Policy-Report-Only")).toBeNull();
   });
 
-  it("other pages enforce only the baseline beside X-Frame-Options; /api routes are left alone", () => {
+  it("enforces the full policy on pages and only frame-ancestors on /api", () => {
     const page = new Headers();
     applyFraming(page, "/portal");
     applyContentSecurityPolicy(page, "/portal", ENV);
     expect(page.get("X-Frame-Options")).toBe("SAMEORIGIN");
-    expect(page.get("Content-Security-Policy")).toBe("object-src 'none'; base-uri 'self'");
-    expect(page.get("Content-Security-Policy-Report-Only")).toContain("default-src 'self'");
+    const policy = page.get("Content-Security-Policy") ?? "";
+    expect(directive(policy, "script-src")).toContain("'unsafe-inline'");
+    expect(directive(policy, "frame-ancestors")).toBe("frame-ancestors 'self'");
+    expect(page.get("Content-Security-Policy-Report-Only")).toBeNull();
     applyContentSecurityPolicy(page, "/portal", ENV);
-    expect(page.get("Content-Security-Policy")).toBe("object-src 'none'; base-uri 'self'");
+    expect(page.get("Content-Security-Policy")).toBe(policy);
 
     const api = new Headers();
     applyContentSecurityPolicy(api, "/api/documents/preview/x", ENV);
-    expect(api.get("Content-Security-Policy")).toBeNull();
+    expect(api.get("Content-Security-Policy")).toBe("frame-ancestors 'self'");
     expect(api.get("Content-Security-Policy-Report-Only")).toBeNull();
   });
 
-  it("the proxy sends both headers on pages and keeps the embed framable", async () => {
+  it("the proxy enforces script-src on a page and does not send a report-only policy", async () => {
     const { proxy } = await import("@/proxy");
     const sheet = await proxy(new NextRequest("https://app.casevoya.ca/sign-in"));
-    expect(sheet.headers.get("Content-Security-Policy")).toBe(ENFORCED_CSP);
-    expect(sheet.headers.get("Content-Security-Policy-Report-Only")).toContain("connect-src 'self' https://proj.supabase.co");
+    const policy = sheet.headers.get("Content-Security-Policy") ?? "";
+    expect(directive(policy, "script-src")).toContain("https://js.stripe.com");
+    expect(directive(policy, "connect-src")).toContain("https://proj.supabase.co");
+    expect(directive(policy, "frame-ancestors")).toBe("frame-ancestors 'self'");
+    expect(sheet.headers.get("Content-Security-Policy-Report-Only")).toBeNull();
     expect(sheet.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
   });
 });
