@@ -38,6 +38,8 @@ describe("Content-Security-Policy", () => {
     expect(directive(policy, "script-src")).toContain("'unsafe-inline'");
     expect(directive(policy, "script-src")).toContain("https://js.stripe.com");
     expect(directive(policy, "script-src")).toContain("https://connect-js.stripe.com");
+    expect(directive(policy, "script-src")).toContain("https://static.cloudflareinsights.com");
+    expect(directive(policy, "connect-src")).toContain("https://cloudflareinsights.com");
     expect(directive(policy, "script-src")).not.toContain("'unsafe-eval'");
     expect(directive(policy, "script-src")).not.toContain("challenges.cloudflare.com");
     expect(directive(policy, "connect-src")).toContain("https://proj.supabase.co");
