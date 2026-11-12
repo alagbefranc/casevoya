@@ -1,0 +1,491 @@
+{
+  "created_by": "seed-investors",
+  "generated": "2026-11-12",
+  "ask": 500000,
+  "criteria": {
+    "stage": "pre-seed",
+    "sectors": [
+      "legal tech",
+      "immigration",
+      "vertical SaaS",
+      "B2B SaaS"
+    ],
+    "geo": [
+      "Canada"
+    ],
+    "check": {
+      "min": 25000,
+      "max": 250000
+    }
+  },
+  "investors": [
+    {
+      "id": "forum-ventures",
+      "name": "Forum Ventures",
+      "firm": "Forum Ventures",
+      "role": "",
+      "email": "",
+      "stage": [
+        "pre-seed"
+      ],
+      "check_min": 100000,
+      "check_max": 750000,
+      "sectors": [
+        "B2B SaaS",
+        "vertical SaaS"
+      ],
+      "geo": [
+        "US",
+        "Canada"
+      ],
+      "last_relevant_deal": {
+        "what": "led the C$850K pre-seed of Brdg (Montreal construction-finance software)",
+        "date": "2026-08-17"
+      },
+      "sources": [
+        "https://www.saasrise.com/deals/brdg-secures-850000-cad-preseed-funding-to-modernize-construction-financing-7bb444e9-30b1-4fae-9c11-bea5455231c7",
+        "https://startupintros.com/resources/forum-ventures-accelerator-2026"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Has a Toronto hub. Also runs an accelerator reported at $100K for about 7.5% equity. Check range is from directories that disagree; confirm on the firm's own pitch page.",
+      "fit": 93,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: vertical SaaS, B2B SaaS (+25)",
+        "checks of $100K-$750K fit the $25K-$250K you want (+20)",
+        "led the C$850K pre-seed of Brdg (Montreal construction-finance software), 87 days ago (+13)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "garage-capital",
+      "name": "Garage Capital",
+      "firm": "Garage Capital",
+      "role": "",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed"
+      ],
+      "check_min": 250000,
+      "check_max": 1000000,
+      "sectors": [
+        "B2B SaaS",
+        "vertical SaaS"
+      ],
+      "geo": [
+        "Canada"
+      ],
+      "last_relevant_deal": null,
+      "sources": [
+        "https://www.ellty.com/investors/toronto-saas-investors",
+        "https://www.garage.vc"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Facts are from a directory listing only. No recent deal read.",
+      "fit": 80,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: vertical SaaS, B2B SaaS (+25)",
+        "checks of $250K-$1M fit the $25K-$250K you want (+20)",
+        "no relevant deal on record (+0)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "zach-posner",
+      "name": "Zach Posner",
+      "firm": "The LegalTech Fund",
+      "role": "Managing Partner",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed",
+        "series a"
+      ],
+      "check_min": 250000,
+      "check_max": 1500000,
+      "sectors": [
+        "legal tech"
+      ],
+      "geo": [
+        "US",
+        "UK",
+        "Canada"
+      ],
+      "last_relevant_deal": {
+        "what": "backed Skribe (deposition intelligence) and Newcode.ai (AI for legal work)",
+        "date": "2026-03-01"
+      },
+      "sources": [
+        "https://www.mcdermottlaw.com/news/the-legaltech-fund-closes-110-million-second-fund-to-power-the-next-generation-of-legal-innovation/",
+        "https://pipeseed.com/investor/the-legaltech-fund-887997",
+        "https://thelogic.co/briefing/doormat-raises-1-25m-in-pre-seed-funding/"
+      ],
+      "warm_intro": false,
+      "personal_line": "Your fund backed Toronto's Doormat at pre-seed, so you already know how Canadian legal practices buy software.",
+      "notes": "Closed a $110M Fund II backed by Clio and Thomson Reuters Ventures. Check size is from a directory and not confirmed by the fund. Last deal is March 2026; exact day not confirmed. Said to prefer founders with legal-practice backgrounds.",
+      "fit": 80,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: legal tech (+15)",
+        "checks of $250K-$1.5M fit the $25K-$250K you want (+20)",
+        "backed Skribe (deposition intelligence) and Newcode.ai (AI for legal work), 256 days ago (+10)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "ripple-ventures",
+      "name": "Ripple Ventures",
+      "firm": "Ripple Ventures",
+      "role": "",
+      "email": "",
+      "stage": [
+        "pre-seed"
+      ],
+      "check_min": 250000,
+      "check_max": 750000,
+      "sectors": [
+        "B2B SaaS"
+      ],
+      "geo": [
+        "Canada"
+      ],
+      "last_relevant_deal": null,
+      "sources": [
+        "https://pipeseed.com/investor/ripple-ventures-933930"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Toronto. Facts are from directories only (another lists $365K-$1.1M). No recent deal read.",
+      "fit": 70,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: B2B SaaS (+15)",
+        "checks of $250K-$750K fit the $25K-$250K you want (+20)",
+        "no relevant deal on record (+0)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "scott-loong",
+      "name": "Scott Loong",
+      "firm": "Panache Ventures",
+      "role": "Partner",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed"
+      ],
+      "check_min": 250000,
+      "check_max": 1000000,
+      "sectors": [
+        "B2B SaaS",
+        "fintech"
+      ],
+      "geo": [
+        "Canada"
+      ],
+      "last_relevant_deal": null,
+      "sources": [
+        "https://www.capboard.io/en/investor/panache-ventures",
+        "https://incubatorlist.com/scott-loong"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Described as a former corporate lawyer. Directories disagree widely on check size ($100K-$3M). No recent legal tech deal found.",
+      "fit": 70,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: B2B SaaS (+15)",
+        "checks of $250K-$1M fit the $25K-$250K you want (+20)",
+        "no relevant deal on record (+0)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "inovia-capital",
+      "name": "Inovia Capital",
+      "firm": "Inovia Capital",
+      "role": "",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed",
+        "series a"
+      ],
+      "check_min": null,
+      "check_max": null,
+      "sectors": [
+        "legal tech",
+        "proptech",
+        "AI"
+      ],
+      "geo": [
+        "Canada"
+      ],
+      "last_relevant_deal": {
+        "what": "led the pre-seed of Paraito (title-search software for Quebec notaries)",
+        "date": "2026-07-05"
+      },
+      "sources": [
+        "https://www.saasrise.com/deals/paraito-raises-us196m-ca265m-to-automate-grunt-work-for-quebec-notaries-908fc4fa-4f5d-4944-b047-6f7a966a02ab",
+        "https://betakit.com/bench-iq-raises-2-8-million-cad-in-pre-seed-funding-with-buy-in-from-maple-vc-haystack/"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Large Montreal firm; also joined Bench IQ's pre-seed. Check size not found and is likely larger than this round. The Paraito source gives two different round amounts.",
+      "fit": 62,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: legal tech (+15)",
+        "check size unknown (+0)",
+        "led the pre-seed of Paraito (title-search software for Quebec notaries), 130 days ago (+12)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "andre-charoo",
+      "name": "Andre Charoo",
+      "firm": "Maple VC",
+      "role": "Founder",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed"
+      ],
+      "check_min": 500000,
+      "check_max": 1500000,
+      "sectors": [
+        "legal tech",
+        "software"
+      ],
+      "geo": [
+        "Canada",
+        "US"
+      ],
+      "last_relevant_deal": {
+        "what": "co-led the C$2.8M pre-seed of Bench IQ (Toronto legal tech)",
+        "date": "2024-02-29"
+      },
+      "sources": [
+        "https://betakit.com/bench-iq-raises-2-8-million-cad-in-pre-seed-funding-with-buy-in-from-maple-vc-haystack/",
+        "https://thelogic.co/briefing/maple-vc-closes-us16-5m-fund-to-back-seed-stage-canadian-founders-around-the-world/"
+      ],
+      "warm_intro": false,
+      "personal_line": "You co-led Bench IQ's pre-seed, a Toronto legal tech company, and you back founders with Canadian roots.",
+      "notes": "Backs founders with Canadian roots wherever they are. Smallest reported check equals the whole round. A directory lists a non-legal pre-seed deal in April 2026.",
+      "fit": 60,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: legal tech (+15)",
+        "checks of $500K-$1.5M are close to the $25K-$250K you want (+10)",
+        "co-led the C$2.8M pre-seed of Bench IQ (Toronto legal tech), 987 days ago (+0)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "eric-agyemang",
+      "name": "Eric Agyemang",
+      "firm": "Maple Bridge Ventures",
+      "role": "Founder",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed"
+      ],
+      "check_min": 250000,
+      "check_max": 1000000,
+      "sectors": [
+        "enterprise tech",
+        "health",
+        "agriculture",
+        "food"
+      ],
+      "geo": [
+        "Canada"
+      ],
+      "last_relevant_deal": null,
+      "sources": [
+        "https://decoder.ca/maple-bridge-ventures-raises-10m-to-back-immigrant-founders/"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Ottawa fund (C$10.2M closed Oct 2025) that invests only in immigrant-led Canadian startups - relevant only if a founder qualifies. No portfolio deals found.",
+      "fit": 55,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "no sector overlap with legal tech, immigration, vertical SaaS, B2B SaaS (+0)",
+        "checks of $250K-$1M fit the $25K-$250K you want (+20)",
+        "no relevant deal on record (+0)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "n49p",
+      "name": "N49P",
+      "firm": "N49P",
+      "role": "",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed"
+      ],
+      "check_min": 500000,
+      "check_max": 750000,
+      "sectors": [
+        "technology",
+        "fintech"
+      ],
+      "geo": [
+        "Canada"
+      ],
+      "last_relevant_deal": {
+        "what": "co-led the C$1.3M pre-seed of Slate (embedded lending for Canadian software platforms)",
+        "date": "2026-02-02"
+      },
+      "sources": [
+        "https://thelogic.co/news/n49p-venture-fourth-fund/",
+        "https://betakit.com/?p=399158"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Canada-focused seed fund raising its fourth fund. Reported to usually co-invest rather than lead. Check size from a search summary of a directory.",
+      "fit": 54,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "no sector overlap with legal tech, immigration, vertical SaaS, B2B SaaS (+0)",
+        "checks of $500K-$750K are close to the $25K-$250K you want (+10)",
+        "co-led the C$1.3M pre-seed of Slate (embedded lending for Canadian software platforms), 283 days ago (+9)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "tower-research-ventures",
+      "name": "Tower Research Ventures",
+      "firm": "Tower Research Ventures",
+      "role": "",
+      "email": "",
+      "stage": [
+        "pre-seed"
+      ],
+      "check_min": null,
+      "check_max": null,
+      "sectors": [
+        "legal tech",
+        "immigration"
+      ],
+      "geo": [
+        "US"
+      ],
+      "last_relevant_deal": {
+        "what": "backed the $2M pre-seed of CaseBlink (AI case preparation for immigration attorneys)",
+        "date": "2025-03-19"
+      },
+      "sources": [
+        "https://refreshmiami.com/news/caseblink-of-miami-raises-2m-to-transform-immigration-case-preparation-with-ai"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "No named partner or check size found. US investor; Canadian appetite unknown.",
+      "fit": 53,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: legal tech, immigration (+25)",
+        "check size unknown (+0)",
+        "backed the $2M pre-seed of CaseBlink (AI case preparation for immigration attorneys), 603 days ago (+3)",
+        "invests in US, not Canada (+0)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "alate-partners",
+      "name": "Alate Partners",
+      "firm": "Alate Partners",
+      "role": "",
+      "email": "",
+      "stage": [
+        "pre-seed",
+        "seed"
+      ],
+      "check_min": null,
+      "check_max": null,
+      "sectors": [
+        "legal tech",
+        "proptech"
+      ],
+      "geo": [
+        "Canada"
+      ],
+      "last_relevant_deal": {
+        "what": "led the $1.25M pre-seed of Doormat (Toronto legal tech for home closings)",
+        "date": "2023-06-01"
+      },
+      "sources": [
+        "https://thelogic.co/briefing/doormat-raises-1-25m-in-pre-seed-funding/"
+      ],
+      "warm_intro": false,
+      "personal_line": "",
+      "notes": "Deal is over three years old and the firm's focus looks like property tech. Low priority.",
+      "fit": 50,
+      "reasons": [
+        "invests at pre-seed (+25)",
+        "sectors match: legal tech (+15)",
+        "check size unknown (+0)",
+        "led the $1.25M pre-seed of Doormat (Toronto legal tech for home closings), 1260 days ago (+0)",
+        "invests in Canada (+10)"
+      ],
+      "added": "2026-11-12"
+    },
+    {
+      "id": "gary-peat",
+      "name": "Gary Peat",
+      "firm": "Valor Ventures",
+      "role": "General Partner",
+      "email": "",
+      "stage": [
+        "seed"
+      ],
+      "check_min": null,
+      "check_max": null,
+      "sectors": [
+        "legal tech",
+        "immigration",
+        "AI"
+      ],
+      "geo": [
+        "US"
+      ],
+      "last_relevant_deal": {
+        "what": "led the $1.6M seed of Visalaw.ai (software for immigration law firms)",
+        "date": "2025-02-19"
+      },
+      "sources": [
+        "https://www.venturenashville.com/article/2143/memphis-based-visalaw-ai-raises-1-6mm-seed-to-fund-growth-innovation"
+      ],
+      "warm_intro": false,
+      "personal_line": "You led the Visalaw.ai seed after evaluating many legal AI tools, so you know how immigration practices run their caseloads.",
+      "notes": "Atlanta firm. Check size and appetite for Canadian companies not found. Already holds a US immigration-software company - could be a conflict or a fit; ask.",
+      "fit": 39,
+      "reasons": [
+        "invests at seed, one stage off pre-seed (+12)",
+        "sectors match: legal tech, immigration (+25)",
+        "check size unknown (+0)",
+        "led the $1.6M seed of Visalaw.ai (software for immigration law firms), 631 days ago (+2)",
+        "invests in US, not Canada (+0)"
+      ],
+      "added": "2026-11-12"
+    }
+  ]
+}

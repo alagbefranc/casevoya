@@ -1,0 +1,295 @@
+{
+  "created_by": "seed-investors",
+  "generated": "2026-11-12",
+  "query": "immigration",
+  "since": "2025-05-01",
+  "until": "2026-11-12",
+  "total_hits": 5,
+  "source": "https://efts.sec.gov/LATEST/search-index?q=immigration&dateRange=custom&startdt=2025-05-01&enddt=2026-11-12&forms=D",
+  "summary": {
+    "filings": 5,
+    "companies": 4,
+    "with_amounts": 4,
+    "median_sold": 36235500,
+    "total_sold": 133771000
+  },
+  "filings": [
+    {
+      "adsh": "0002163102-26-000001",
+      "cik": "0002163102",
+      "company": "BELONG IMMIGRATION SERVICES, INC",
+      "form": "D",
+      "filed": "2026-11-04",
+      "location": "Wilmington, DE",
+      "state_of_inc": "DE",
+      "url": "https://www.sec.gov/Archives/edgar/data/2163102/000216310226000001/0002163102-26-000001-index.htm",
+      "doc_url": "https://www.sec.gov/Archives/edgar/data/2163102/000216310226000001/primary_doc.xml",
+      "city": "WILMINGTON",
+      "state": "DE",
+      "incorporated": "DELAWARE",
+      "year_of_inc": "2026",
+      "entity_type": "Corporation",
+      "industry": "Business Services",
+      "fund_type": null,
+      "amendment": false,
+      "first_sale": "2026-09-10",
+      "securities": [
+        "options",
+        "SAFE"
+      ],
+      "amount_offered": "indefinite",
+      "amount_sold": 500000,
+      "amount_remaining": "indefinite",
+      "investors_count": 1,
+      "minimum_investment": 1,
+      "related_persons": [
+        {
+          "name": "Achint Singh",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": ""
+        }
+      ]
+    },
+    {
+      "adsh": "0002144304-26-000001",
+      "cik": "0002144304",
+      "company": "Lighthouse Fund 6, LP",
+      "form": "D",
+      "filed": "2026-07-23",
+      "location": "Dallas, TX",
+      "state_of_inc": "DE",
+      "url": "https://www.sec.gov/Archives/edgar/data/2144304/000214430426000001/0002144304-26-000001-index.htm",
+      "doc_url": "https://www.sec.gov/Archives/edgar/data/2144304/000214430426000001/primary_doc.xml",
+      "city": "DALLAS",
+      "state": "TX",
+      "incorporated": "DELAWARE",
+      "year_of_inc": "2026",
+      "entity_type": "Limited Partnership",
+      "industry": "Pooled Investment Fund",
+      "fund_type": "Private Equity Fund",
+      "amendment": false,
+      "first_sale": "2026-04-21",
+      "securities": [
+        "equity"
+      ],
+      "amount_offered": "indefinite",
+      "amount_sold": 14071000,
+      "amount_remaining": "indefinite",
+      "investors_count": 19,
+      "minimum_investment": 800000,
+      "related_persons": [
+        {
+          "name": "Doug Conner",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC, the managing member of Lighthouse Fund 6 GP, LLC, Issuers GP."
+        },
+        {
+          "name": "Tina Hou",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC the managing member of Lighthouse Fund 6 GP, LLC, Issuers GP."
+        },
+        {
+          "name": "Gabriel Hidalgo",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC, the managing member of Lighthouse Fund 6 GP, LLC, Issuers GP."
+        },
+        {
+          "name": "James Crigler",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC, the managing member of Lighthouse Fund 6 GP, LLC, Issuers GP."
+        },
+        {
+          "name": "- Lighthouse Fund 6 GP, LLC",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "General Partner of the Issuer"
+        }
+      ]
+    },
+    {
+      "adsh": "0001315863-25-000523",
+      "cik": "0002010431",
+      "company": "Civitas Hawaii Fund, LP",
+      "form": "D/A",
+      "filed": "2025-07-17",
+      "location": "Dallas, TX",
+      "state_of_inc": "TX",
+      "url": "https://www.sec.gov/Archives/edgar/data/2010431/000131586325000523/0001315863-25-000523-index.htm",
+      "doc_url": "https://www.sec.gov/Archives/edgar/data/2010431/000131586325000523/primary_doc.xml",
+      "city": "DALLAS",
+      "state": "TX",
+      "incorporated": "TEXAS",
+      "year_of_inc": "2024",
+      "entity_type": "Limited Partnership",
+      "industry": "Pooled Investment Fund",
+      "fund_type": "Other Investment Fund",
+      "amendment": true,
+      "first_sale": "2024-08-21",
+      "securities": [
+        "equity"
+      ],
+      "amount_offered": 120000000,
+      "amount_sold": 60800000,
+      "amount_remaining": 59200000,
+      "investors_count": 76,
+      "minimum_investment": 800000,
+      "related_persons": [
+        {
+          "name": "N/A Civitas Hawaii Fund GP, LP",
+          "relationships": [
+            "Promoter"
+          ],
+          "clarification": "Civitas Hawaii Fund GP, LP is the General Partner of the Issuer."
+        },
+        {
+          "name": "N/A Civitas Alternative Investments II, LLC",
+          "relationships": [
+            "Promoter"
+          ],
+          "clarification": "Civitas Alternative Investments II, LLC is the Investment Manager of the Issuer."
+        },
+        {
+          "name": "N/A CCM II General Partner, LLC",
+          "relationships": [
+            "Promoter"
+          ],
+          "clarification": "CCM II General Partner, LLC is the General Partner of Civitas Hawaii Fund GP, LP."
+        },
+        {
+          "name": "Daniel Healy",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "Mr. Healy is the Chief Executive Officer of Civitas Alternative Investments II, LLC."
+        }
+      ]
+    },
+    {
+      "adsh": "0001315863-25-000445",
+      "cik": "0002010431",
+      "company": "Civitas Hawaii Fund, LP",
+      "form": "D/A",
+      "filed": "2025-06-05",
+      "location": "Dallas, TX",
+      "state_of_inc": "TX",
+      "url": "https://www.sec.gov/Archives/edgar/data/2010431/000131586325000445/0001315863-25-000445-index.htm",
+      "doc_url": "https://www.sec.gov/Archives/edgar/data/2010431/000131586325000445/primary_doc.xml",
+      "city": "DALLAS",
+      "state": "TX",
+      "incorporated": "TEXAS",
+      "year_of_inc": "2024",
+      "entity_type": "Limited Partnership",
+      "industry": "Pooled Investment Fund",
+      "fund_type": "Other Investment Fund",
+      "amendment": true,
+      "first_sale": "2024-08-21",
+      "securities": [
+        "equity"
+      ],
+      "amount_offered": 173600000,
+      "amount_sold": 58400000,
+      "amount_remaining": 115200000,
+      "investors_count": 73,
+      "minimum_investment": 800000,
+      "related_persons": [
+        {
+          "name": "N/A Civitas Hawaii Fund GP, LP",
+          "relationships": [
+            "Promoter"
+          ],
+          "clarification": "Civitas Hawaii Fund GP, LP is the General Partner of the Issuer."
+        },
+        {
+          "name": "N/A Civitas Alternative Investments II, LLC",
+          "relationships": [
+            "Promoter"
+          ],
+          "clarification": "Civitas Alternative Investments II, LLC is the Investment Manager of the Issuer."
+        },
+        {
+          "name": "N/A CCM II General Partner, LLC",
+          "relationships": [
+            "Promoter"
+          ],
+          "clarification": "CCM II General Partner, LLC is the General Partner of Civitas Hawaii Fund GP, LP."
+        },
+        {
+          "name": "Daniel Healy",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "Mr. Healy is the Chief Executive Officer of Civitas Alternative Investments II, LLC."
+        }
+      ]
+    },
+    {
+      "adsh": "0002069691-25-000001",
+      "cik": "0002069691",
+      "company": "HC2 FARMERS BRANCH SR LOAN, LP",
+      "form": "D",
+      "filed": "2025-05-27",
+      "location": "Dallas, TX",
+      "state_of_inc": "TX",
+      "url": "https://www.sec.gov/Archives/edgar/data/2069691/000206969125000001/0002069691-25-000001-index.htm",
+      "doc_url": "https://www.sec.gov/Archives/edgar/data/2069691/000206969125000001/primary_doc.xml",
+      "city": "DALLAS",
+      "state": "TX",
+      "incorporated": "TEXAS",
+      "year_of_inc": "2024",
+      "entity_type": "Limited Partnership",
+      "industry": "Pooled Investment Fund",
+      "fund_type": "Private Equity Fund",
+      "amendment": false,
+      "first_sale": "yet to occur",
+      "securities": [
+        "equity"
+      ],
+      "amount_offered": "indefinite",
+      "amount_sold": 0,
+      "amount_remaining": "indefinite",
+      "investors_count": 0,
+      "minimum_investment": 800000,
+      "related_persons": [
+        {
+          "name": "Doug Conner",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC, the managing member of HC2 Farmers Branch Senior Loan GP, LLC, Issuer's GP."
+        },
+        {
+          "name": "Tina Hou",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC, the managing member of HC2 Farmers Branch Senior Loan GP, LLC, Issuer's GP."
+        },
+        {
+          "name": "James Crigler",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC, the managing member of HC2 Farmers Branch Senior Loan GP, LLC, Issuer's GP."
+        },
+        {
+          "name": "Gabriel Hidalgo",
+          "relationships": [
+            "Executive Officer"
+          ],
+          "clarification": "The Related Person is a member of HC2 Capital, LLC, the managing member of HC2 Farmers Branch Senior Loan GP, LLC, Issuer's GP."
+        }
+      ]
+    }
+  ]
+}
