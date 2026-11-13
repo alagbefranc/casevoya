@@ -261,7 +261,7 @@ export function RedactHost() {
 async function renderPdf(bytes: Uint8Array): Promise<PageView[]> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.mjs";
-  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
   const views: PageView[] = [];
   const count = Math.min(doc.numPages, 40);
   for (let number = 1; number <= count; number += 1) {
