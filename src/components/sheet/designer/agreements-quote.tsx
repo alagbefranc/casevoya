@@ -342,10 +342,10 @@ export type QuoteEditDialogData = {
   sample: boolean;
 };
 
-function LineRow({ line, index }: { line: QuoteLineInput; index: number }) {
+function LineRow({ line, index, currency }: { line: QuoteLineInput; index: number; currency: string }) {
   return (
     <tr data-quote-line={"1"}>
-      <td>
+      <td data-label={"Category"}>
         <select className={"sel"} aria-label={`Line ${index + 1} category`} data-field={"category"} defaultValue={line.category}>
           {QUOTE_LINE_CATEGORIES.map((option) => (
             <option key={option.value} value={option.value}>
@@ -354,16 +354,16 @@ function LineRow({ line, index }: { line: QuoteLineInput; index: number }) {
           ))}
         </select>
       </td>
-      <td>
+      <td data-label={"Description"}>
         <input className={"inp"} type={"text"} aria-label={`Line ${index + 1} description`} data-field={"description"} maxLength={300} defaultValue={line.description} autoComplete={"off"} />
       </td>
-      <td>
+      <td data-label={currency}>
         <input className={"inp"} type={"text"} inputMode={"decimal"} aria-label={`Line ${index + 1} amount`} data-field={"amount"} maxLength={16} placeholder={"0.00"} defaultValue={line.amount} autoComplete={"off"} />
       </td>
-      <td>
+      <td data-label={"Tax %"}>
         <input className={"inp"} type={"text"} inputMode={"decimal"} aria-label={`Line ${index + 1} tax rate percent`} data-field={"taxRate"} maxLength={6} placeholder={"%"} defaultValue={line.taxRate} autoComplete={"off"} />
       </td>
-      <td>
+      <td data-label={"Source"}>
         <input
           className={"inp"}
           type={"text"}
@@ -384,16 +384,16 @@ function LineRow({ line, index }: { line: QuoteLineInput; index: number }) {
   );
 }
 
-function InstalmentRow({ row, index }: { row: QuoteInstalmentInput; index: number }) {
+function InstalmentRow({ row, index, currency }: { row: QuoteInstalmentInput; index: number; currency: string }) {
   return (
     <tr data-quote-instalment={"1"}>
-      <td>
+      <td data-label={"When"}>
         <input className={"inp"} type={"text"} aria-label={`Instalment ${index + 1} label`} data-field={"label"} maxLength={200} placeholder={"On signing, or a milestone"} defaultValue={row.label} autoComplete={"off"} />
       </td>
-      <td>
+      <td data-label={currency}>
         <input className={"inp"} type={"text"} inputMode={"decimal"} aria-label={`Instalment ${index + 1} amount`} data-field={"amount"} maxLength={16} placeholder={"0.00"} defaultValue={row.amount} autoComplete={"off"} />
       </td>
-      <td>
+      <td data-label={"Paid as"}>
         <select className={"sel"} aria-label={`Instalment ${index + 1} paid as`} data-field={"paidAs"} defaultValue={row.paidAs}>
           {QUOTE_PAID_AS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -468,13 +468,13 @@ export function QuoteEditDialog({ data }: { data: QuoteEditDialogData }) {
               </thead>
               <tbody>
                 {(data.lines.length ? data.lines : [EMPTY_LINE]).map((line, index) => (
-                  <LineRow key={index} line={line} index={index} />
+                  <LineRow key={index} line={line} index={index} currency={data.currency} />
                 ))}
               </tbody>
             </table>
           </div>
           <template id={"qeLineRow"}>
-            <LineRow line={EMPTY_LINE} index={0} />
+            <LineRow line={EMPTY_LINE} index={0} currency={data.currency} />
           </template>
           <div className={"fp-row"} style={{ marginTop: "8px" }}>
             <button className={"btn sm"} type={"button"} data-quote-add={"qeLines"}>
@@ -503,13 +503,13 @@ export function QuoteEditDialog({ data }: { data: QuoteEditDialogData }) {
               </thead>
               <tbody>
                 {data.instalments.map((row, index) => (
-                  <InstalmentRow key={index} row={row} index={index} />
+                  <InstalmentRow key={index} row={row} index={index} currency={data.currency} />
                 ))}
               </tbody>
             </table>
           </div>
           <template id={"qeInstRow"}>
-            <InstalmentRow row={EMPTY_INSTALMENT} index={0} />
+            <InstalmentRow row={EMPTY_INSTALMENT} index={0} currency={data.currency} />
           </template>
           <div className={"fp-row"} style={{ marginTop: "8px" }}>
             <button className={"btn sm"} type={"button"} data-quote-add={"qeInst"}>

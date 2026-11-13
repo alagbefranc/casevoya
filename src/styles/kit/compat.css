@@ -64,3 +64,34 @@
    Inside a label the tag is inline text again, as on the Designer's form pages. */
 label .opt,.check .opt{display:inline;width:auto;padding:0;border:0;border-radius:0;background:none;transition:none;text-align:inherit}
 label .opt:hover{border-color:transparent}label .opt:active{transform:none}
+
+/* Edit quote. The fee and instalment editors are width:100% tables of width:100% inputs.
+   The source placeholder is a sentence, so the table gives that column the space and the
+   amount column collapses (about 11px on the desktop dialog, one character on a phone).
+   Keep the table on a wide window and reserve a column wide enough for 1,600.00. On a
+   phone, stack each line as a labelled card so every field is the full width of the sheet. */
+#dlgQEdit .fld:has(#qeLines),#dlgQEdit .fld:has(#qeInst){max-width:none}
+#dlgQEdit #qeLines .inp,#dlgQEdit #qeLines .sel,#dlgQEdit #qeInst .inp,#dlgQEdit #qeInst .sel{min-width:0}
+#dlgQEdit [data-quote-add],#dlgQEdit [data-quote-remove]{touch-action:manipulation}
+@media (min-width:601px){
+  #dlgQEdit.dlg.wide{width:min(1080px,calc(100vw - 32px))}
+  /* Wide enough that the amount, the category and Remove stay readable. A long source note scrolls inside its field. */
+  #dlgQEdit #qeLines td:nth-child(1){min-width:14rem}
+  #dlgQEdit #qeLines td:nth-child(2),#dlgQEdit #qeInst td:nth-child(1){min-width:11rem}
+  #dlgQEdit #qeLines td:nth-child(3),#dlgQEdit #qeInst td:nth-child(2){min-width:9rem}
+  #dlgQEdit #qeLines td:nth-child(4){min-width:5.5rem}
+  #dlgQEdit #qeLines td:nth-child(5){min-width:10rem}
+  #dlgQEdit #qeLines td:nth-child(6),#dlgQEdit #qeInst td:nth-child(4){min-width:6.5rem}
+  #dlgQEdit #qeInst td:nth-child(3){min-width:14rem}
+}
+@media (max-width:600px){
+  #dlgQEdit .fld{max-width:none;min-width:0}
+  #dlgQEdit .tw{overflow:visible;min-width:0}
+  #dlgQEdit #qeLines,#dlgQEdit #qeInst,#dlgQEdit #qeLines tbody,#dlgQEdit #qeInst tbody,#dlgQEdit #qeLines tr,#dlgQEdit #qeInst tr{display:block;width:100%;min-width:0}
+  #dlgQEdit #qeLines thead,#dlgQEdit #qeInst thead{display:none}
+  #dlgQEdit #qeLines tr[data-quote-line],#dlgQEdit #qeInst tr[data-quote-instalment]{border:1px solid var(--line);border-radius:12px;background:var(--canvas);padding:12px 12px 2px;margin:0 0 10px}
+  #dlgQEdit #qeLines td,#dlgQEdit #qeInst td{display:block;width:100%;min-width:0;border:0;padding:0 0 10px}
+  #dlgQEdit #qeLines td:last-child,#dlgQEdit #qeInst td:last-child{padding-bottom:10px}
+  #dlgQEdit td[data-label]::before{content:attr(data-label);display:block;margin:0 0 4px;font-size:13px;font-weight:500;color:var(--ink)}
+  #dlgQEdit [data-quote-add],#dlgQEdit [data-quote-remove]{min-height:44px}
+}

@@ -6,6 +6,9 @@ import type { QuoteInstalmentInput, QuoteLineInput } from "@/components/sheet/de
 import { createQuote, editAgreementClause, quoteToAgreement, saveQuote, sendQuote } from "@/modules/agreements/quote-actions";
 import { agreementStepUpLocation, needsStepUp } from "@/modules/sheet/agreements-present";
 import { agreementTabHref, readClauseEdit, readNewQuote, readQuoteConvert, readQuoteEdit } from "@/modules/sheet/agreements-views-present";
+import { editQuoteTable } from "./quote-table";
+
+export { editQuoteTable };
 
 type Router = { refresh: () => void; replace: (href: string) => void; push: (href: string) => void };
 
@@ -76,24 +79,6 @@ function quoteFields(dialog: ParentNode) {
     expiry: value(dialog, "qeE"),
     government: value(dialog, "qeG"),
   };
-}
-
-/** Add a row (from the table's `<template>`) or remove one, inside the Edit quote dialog. */
-export function editQuoteTable(target: HTMLElement): boolean {
-  const add = target.closest<HTMLElement>("[data-quote-add]");
-  if (add?.dataset.quoteAdd) {
-    const table = document.getElementById(add.dataset.quoteAdd);
-    const template = document.getElementById(add.dataset.quoteAdd === "qeLines" ? "qeLineRow" : "qeInstRow") as HTMLTemplateElement | null;
-    const body = table?.querySelector("tbody");
-    if (body && template) body.appendChild(template.content.cloneNode(true));
-    return true;
-  }
-  const remove = target.closest<HTMLElement>("[data-quote-remove]");
-  if (remove) {
-    remove.closest("tr")?.remove();
-    return true;
-  }
-  return false;
 }
 
 /** Save quote: the database totals the lines, in cents, and decides (in place, or a new version). */
