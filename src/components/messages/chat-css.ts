@@ -3,7 +3,7 @@
  * owner's request (2026-10-18; second pass the same day: one composer card, a Vo menu and draft
  * bar, a roomier thread, the matter's details rail hidden while Messages is open). Built only from
  * the kit's tokens (src/styles/kit/base.css): the blue, tint, canvas, ink, secondary text,
- * hairline, muted, ok/warn/bad pairs, radii and timings. No new palette. Inter for UI text.
+ * hairline, muted, ok/warn/bad pairs, radii and timings. No new palette. Source Sans 3 for UI text.
  */
 export const CHAT_CSS = `
 .main:has(.cv){padding-bottom:0}

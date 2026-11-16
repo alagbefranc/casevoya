@@ -69,7 +69,7 @@ Values are implementation defaults. Tokens prefixed semantic are original adapta
   --space-12: 48px;
   --space-16: 64px;
   --space-20: 80px;
-  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-ui: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-editorial: 'Source Serif 4', Georgia, serif;
   --font-code: ui-monospace, SFMono-Regular, Consolas, monospace;
   --motion-fast: 120ms;

@@ -18,6 +18,7 @@ const STRIPE_DIALOG_PARAM = "stripe";
 export const STRIPE_DISCONNECT_DIALOG = "dlgStripeOff";
 const STRIPE_DISCONNECT_PARAM = "stripe-disconnect";
 
+/** Stripe's embedded frame cannot load the self-hosted face, so it uses the system sans. */
 const APPEARANCE = {
   overlays: "dialog" as const,
   variables: {
@@ -25,7 +26,7 @@ const APPEARANCE = {
     colorText: "#111111",
     colorDanger: "#c4382b",
     borderRadius: "10px",
-    fontFamily: "Inter, system-ui, sans-serif",
+    fontFamily: "system-ui, -apple-system, Segoe UI, sans-serif",
   },
 };
 

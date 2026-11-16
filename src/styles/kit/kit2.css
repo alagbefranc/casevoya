@@ -102,7 +102,7 @@ dialog.dlg.out{animation:dlgout 150ms ease-out forwards}
 @media (max-width:600px){.drw{top:auto;left:0;right:0;bottom:0;width:100%;max-height:88dvh;border-radius:18px 18px 0 0;transform:translateY(100%)}}
 /* ---------- file card ---------- */
 .fcard{display:grid;grid-template-columns:52px 1fr auto;gap:14px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:14px;background:#fff;transition:border-color var(--fast),transform 150ms var(--ease)}
-@media (hover:hover) and (pointer:fine){.fcard:hover{border-color:#cfcac4;transform:translateY(-1px)}}
+@media (hover:hover) and (pointer:fine){.fcard:hover{border-color:#cfcac4}}
 .fcard .th{width:52px;height:64px;border-radius:8px;background:var(--canvas);display:grid;place-items:center;color:#55514d;position:relative;overflow:hidden}
 .fcard .th::after{content:"";position:absolute;top:0;right:0;width:14px;height:14px;background:linear-gradient(225deg,#fff 50%,#dedad5 50%)}
 .fcard h4{font-size:15px;font-weight:500;line-height:1.3}.fcard .meta{font-size:13px;color:var(--t2);display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;align-items:center}
@@ -132,10 +132,7 @@ fieldset.fld{border:0;min-width:0}
 .fcard .meta{gap:2px 8px}
 /* ===================== Phase 2 motion kit (React Bits ports + swipe patterns). Palette B, Erode, reduced-motion safe ===================== */
 .k2-sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-/* SpotlightCard */
-.k2-spot{position:relative;isolation:isolate}
-.k2-spot::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;opacity:0;transition:opacity 200ms ease-out;background:radial-gradient(220px circle at var(--mx,50%) var(--my,50%),rgba(0,117,222,.09),transparent 70%)}
-.k2-spot:hover::before{opacity:1}
+.k2-spot{position:relative}
 /* ShinyText: sheen on a readable base colour. Highlight is a Palette B tint (blue #0075DE mixed into paper #F6F5F4) since 17 Oct; was #9fc8ef */
 .k2-shiny{background:linear-gradient(110deg,currentColor 40%,color-mix(in srgb,#0075DE 55%,#F6F5F4) 50%,currentColor 60%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:k2shine 2.4s linear infinite}
 @keyframes k2shine{from{background-position:100% 0}to{background-position:-50% 0}}

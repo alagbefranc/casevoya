@@ -32,7 +32,7 @@ type Seed = { message?: { tone: "bad" | "ok"; text: string }; code?: string; mod
 
 const MAX_IMAGE_BYTES = 1_572_864;
 
-/** The design's signing page styles, on the app's tokens (Inter for text, Erode for headings and the typed mark). */
+/** The design's signing page styles, on the app's tokens (Source Sans 3 for text, Erode for headings and the typed mark). */
 export const SIGN_PAGE_CSS = `
 .es{background:var(--canvas);min-height:100vh;display:flex;flex-direction:column}
 .es-top{display:flex;align-items:center;gap:14px;padding:14px clamp(16px,4vw,40px);background:#fff;border-bottom:1px solid var(--line)}
