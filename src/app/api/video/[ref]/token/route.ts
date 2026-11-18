@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SAME_ORIGIN_ERROR, isSameOriginMutation } from "@/lib/security/origin";
 import { joinCall, joinGuestCall, validCall } from "@/modules/video/service";
 
 const NO_STORE = { "Cache-Control": "private, no-store" };
@@ -9,6 +10,7 @@ const NO_STORE = { "Cache-Control": "private, no-store" };
  * Body: { organizationId }.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ ref: string }> }) {
+  if (!isSameOriginMutation(request)) return NextResponse.json({ error: SAME_ORIGIN_ERROR }, { status: 403, headers: NO_STORE });
   const { ref } = await params;
   const body = (await request.json().catch(() => null)) as { organizationId?: unknown; guestToken?: unknown; name?: unknown } | null;
   const organizationId = body?.organizationId;

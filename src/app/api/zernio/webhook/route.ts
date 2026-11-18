@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readLimitedBody } from "@/lib/http/limited-body";
 import { createServiceClient } from "@/lib/supabase/service";
 import { whatsappRuntimeConfig } from "@/modules/whatsapp/env";
 import { signatureHeader, verifyZernioSignature } from "@/modules/whatsapp/signature";
@@ -16,8 +17,11 @@ export async function POST(request: Request) {
   if (!config.webhookSecret || !config.serviceKey) {
     return NextResponse.json({ error: "WhatsApp webhook is not configured." }, { status: 503 });
   }
-  const raw = await request.text();
-  if (raw.length > 512_000) return NextResponse.json({ error: "Too large." }, { status: 413 });
+  // Reading stops at the limit, before the signature check, so an unsigned caller can't make the
+  // Worker buffer a large body.
+  const read = await readLimitedBody(request, 512_000);
+  if (!read.ok) return NextResponse.json({ error: read.reason === "too_large" ? "Too large." : "Invalid length." }, { status: read.reason === "too_large" ? 413 : 400 });
+  const raw = new TextDecoder().decode(read.bytes);
   if (!(await verifyZernioSignature(config.webhookSecret, raw, signatureHeader(request.headers)))) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }

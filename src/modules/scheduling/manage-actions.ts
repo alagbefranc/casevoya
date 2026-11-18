@@ -67,9 +67,14 @@ export async function manageCancel(input: { ref: string; token: string; reason: 
   if (!hash) return { error: manageError("access denied") };
   const reason = (input.reason ?? "").trim();
   if (reason.length < 3) return { error: manageError("say why") };
-  const aligned = await alignProviderCancel({ bookingId: input.bookingId ?? null, organizationId: null, ref: input.ref, sha256: hash });
-  if ("error" in aligned) return { error: aligned.error };
   const supabase = await createClient();
+  // The booking this link opens, read from the database: an id sent with the request is never
+  // used, so a link for one booking cannot close another booking's meeting or call room.
+  const { data: opened } = await supabase.rpc("booking_manage_view", { p_ref: input.ref, p_sha256: hash });
+  const openedId = opened && typeof opened === "object" && !Array.isArray(opened) ? (opened as { id?: unknown }).id : null;
+  const bookingId = typeof openedId === "string" ? openedId : null;
+  const aligned = await alignProviderCancel({ bookingId, organizationId: null, ref: input.ref, sha256: hash });
+  if ("error" in aligned) return { error: aligned.error };
   const { data, error } = await supabase.rpc("booking_manage_cancel", {
     p_ref: input.ref,
     p_sha256: hash,
@@ -77,7 +82,7 @@ export async function manageCancel(input: { ref: string; token: string; reason: 
     p_reason: reason.slice(0, 500),
   });
   if (error) return { error: manageError(error.message) };
-  if (input.bookingId) closeRoomForBooking(input.bookingId);
+  if (bookingId) closeRoomForBooking(bookingId);
   const late = Boolean(data && typeof data === "object" && !Array.isArray(data) && (data as { late?: unknown }).late === true);
   return { ok: true, late };
 }
