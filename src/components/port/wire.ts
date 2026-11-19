@@ -518,7 +518,7 @@ export function usePortActions(page: string, token?: string) {
           return verifyEmailCode(val(event.root, "rem"), event.code, "recovery");
         }
         if (page === "start-trial" && event.then === "#2") {
-          const verified = await verifyEmailCode(val(event.root, "wem"), event.code, "signup");
+          const verified = await verifyEmailCode(val(event.root, "wem"), event.code, "signup", val(event.root, "tpw"));
           // Resumed after a reload or a sign-in (#330): step 0's firm and licence weren't kept,
           // so the signed-in start-trial screen asks for them.
           if (verified?.ok && !val(event.root, "firm")) return { ok: true, href: "/start-trial" };

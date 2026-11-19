@@ -61,6 +61,11 @@ vi.mock("@/lib/supabase/server", () => ({
           state.verifyArgs = args;
           return { data: {}, error: state.verify };
         },
+        updateUser: async (args: unknown) => {
+          state.calls.push("updateUser");
+          (state as { updateArgs?: unknown }).updateArgs = args;
+          return { data: {}, error: null };
+        },
       },
       from: () => query,
       rpc: async (name: string, args?: Record<string, unknown>) => {
@@ -199,6 +204,18 @@ describe("joinPortalInvite validation", () => {
       ok: false,
       message: "Too many tries. Please wait a few minutes and try again.",
     });
+  });
+
+  // Security review 2026-11-18: Supabase keeps the first password of an unconfirmed account, so a
+  // stranger who signed up with the client's email first would keep a working password.
+  it("sets the typed password once the code proves the mailbox, then accepts", async () => {
+    state.verify = null;
+    state.calls.length = 0;
+    const result = await confirmPortalInvite({ token: TOKEN, code: "123456", payload: PAYLOAD, password: GOOD });
+    expect(result).toMatchObject({ ok: true });
+    expect((state as { updateArgs?: unknown }).updateArgs).toEqual({ password: GOOD });
+    expect(state.calls.indexOf("updateUser")).toBeGreaterThan(state.calls.indexOf("verifyOtp"));
+    expect(state.calls.indexOf("accept_portal_invitation")).toBeGreaterThan(state.calls.indexOf("updateUser"));
   });
 
   // Bug 5 (2026-10-25): each Continue emailed a new code, which made the one the client held stop working.

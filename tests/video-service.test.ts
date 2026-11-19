@@ -66,10 +66,22 @@ afterEach(() => {
 
 async function postToken() {
   const { POST } = await import("@/app/api/video/[ref]/token/route");
-  return POST(new Request("https://app.test/api/video/x/token", { method: "POST", body: JSON.stringify({ organizationId: ORG }) }), { params: Promise.resolve({ ref: REF }) });
+  return POST(new Request("https://app.test/api/video/x/token", { method: "POST", body: JSON.stringify({ organizationId: ORG }), headers: { origin: "https://app.test" } }), { params: Promise.resolve({ ref: REF }) });
 }
 
 describe("token route", () => {
+  it("a request from another site, or with no Origin, is refused before anything is read", async () => {
+    const { POST } = await import("@/app/api/video/[ref]/token/route");
+    const body = JSON.stringify({ organizationId: ORG });
+    const none = await POST(new Request("https://app.test/x", { method: "POST", body }), { params: Promise.resolve({ ref: REF }) });
+    const other = await POST(new Request("https://app.test/x", { method: "POST", body, headers: { origin: "https://evil.test" } }), { params: Promise.resolve({ ref: REF }) });
+    expect([none.status, other.status]).toEqual([403, 403]);
+    const { POST: admit } = await import("@/app/api/video/[ref]/admit/route");
+    const refused = await admit(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ organizationId: ORG, identity: "client:x", admit: true }) }), { params: Promise.resolve({ ref: REF }) });
+    expect(refused.status).toBe(403);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it("a waiting client gets a lobby token; the room is created once and recorded", async () => {
     rpc.mockImplementation(async (name: string) => (name === "video_join" ? { data: open(), error: null } : { data: null, error: null }));
     const response = await postToken();
@@ -153,7 +165,7 @@ describe("token route", () => {
     rpc.mockResolvedValue({ data: null, error: { message: "call access denied" } });
     expect((await postToken()).status).toBe(403);
     const { POST } = await import("@/app/api/video/[ref]/token/route");
-    const bad = await POST(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ organizationId: ORG }) }), { params: Promise.resolve({ ref: "NOT-A-REF" }) });
+    const bad = await POST(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ organizationId: ORG }), headers: { origin: "https://app.test" } }), { params: Promise.resolve({ ref: "NOT-A-REF" }) });
     expect(bad.status).toBe(400);
     getClaims.mockResolvedValueOnce({ data: { claims: null } } as never);
     expect((await postToken()).status).toBe(401);
@@ -173,7 +185,7 @@ describe("guest token route", () => {
   const GUEST_ROOM = `cv-${BOOKING.replaceAll("-", "")}`;
   async function postGuest() {
     const { POST } = await import("@/app/api/video/[ref]/token/route");
-    return POST(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ guestToken: "g".repeat(43), name: "Sam" }) }), { params: Promise.resolve({ ref: REF }) });
+    return POST(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ guestToken: "g".repeat(43), name: "Sam" }), headers: { origin: "https://app.test" } }), { params: Promise.resolve({ ref: REF }) });
   }
 
   it("a guest gets a short lobby token bound to their booking's identity and room", async () => {
@@ -208,7 +220,7 @@ describe("guest token route", () => {
 describe("admit route", () => {
   async function postAdmit(admit: boolean, identity = "client:00000000-0000-4000-8000-0000000000bb") {
     const { POST } = await import("@/app/api/video/[ref]/admit/route");
-    return POST(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ organizationId: ORG, identity, admit }) }), { params: Promise.resolve({ ref: REF }) });
+    return POST(new Request("https://app.test/x", { method: "POST", body: JSON.stringify({ organizationId: ORG, identity, admit }), headers: { origin: "https://app.test" } }), { params: Promise.resolve({ ref: REF }) });
   }
 
   it("admitting gives the client publish and subscribe rights in the room", async () => {

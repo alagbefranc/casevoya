@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { isUuid } from "@/lib/tenant/context";
+import { STAFF_ROLES } from "@/lib/tenant/roles";
 import { IRCC_FEE_LIST_URL, readFeeListPage } from "@/modules/billing/ircc-fee-list";
 import {
   billingError,
@@ -293,6 +294,18 @@ export async function endTaxRate(input: { organizationId: string; rateId: string
 export async function fetchFeeList(input: { organizationId: string }): Promise<Result<{ rows: number; sha256: string }>> {
   const session = await staffClient(input.organizationId);
   if ("error" in session) return { error: session.error };
+  // Only this firm's staff reach the outbound request; the database still decides who may record.
+  const { data: claims } = await session.supabase.auth.getClaims();
+  const { data: staff } = await session.supabase
+    .from("memberships")
+    .select("id")
+    .eq("organization_id", input.organizationId)
+    .eq("user_id", claims?.claims?.sub ?? "")
+    .eq("status", "active")
+    .in("role", [...STAFF_ROLES])
+    .limit(1)
+    .maybeSingle();
+  if (!staff) return { error: "Only the firm’s staff can read the fee list." };
   const read = await readFeeListPage(fetch);
   if ("error" in read) return read;
   const { data, error } = await session.supabase.rpc("record_government_fee_snapshot", {

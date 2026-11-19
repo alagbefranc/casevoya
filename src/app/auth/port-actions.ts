@@ -271,7 +271,23 @@ export async function sendRecoveryEmail(email: string, captchaToken?: string | n
   return { ok: true };
 }
 
-export async function verifyEmailCode(email: string, code: string, purpose: "recovery" | "signup"): Promise<PortResult | null> {
+/**
+ * Sets the password the person typed in this flow, right after their sign-up code proved they own
+ * the mailbox. Supabase keeps the first password of an unconfirmed account, so someone who signed
+ * up with another person's email first would otherwise keep a password that works on the account
+ * its real owner just confirmed. Best effort: the same password again, or a refusal, changes
+ * nothing and never blocks the person who confirmed.
+ */
+async function adoptTypedPassword(supabase: Awaited<ReturnType<typeof createClient>>, password: string | null | undefined) {
+  if (typeof password !== "string" || password.length > 200 || !passwordOk(password)) return;
+  try {
+    await supabase.auth.updateUser({ password });
+  } catch {
+    // The account stays as it was; password recovery replaces the password either way.
+  }
+}
+
+export async function verifyEmailCode(email: string, code: string, purpose: "recovery" | "signup", password?: string): Promise<PortResult | null> {
   if (!hasPublicSupabaseEnv()) return nullResult();
   if (!/^\d{6}$/.test(code)) return fail("That code didn’t match.");
   if (!(await verifyAllowed())) return limited();
@@ -285,6 +301,7 @@ export async function verifyEmailCode(email: string, code: string, purpose: "rec
   });
   await resolveAuthAttempt(gate, Boolean(error));
   if (error) return fail("That code didn’t match.");
+  if (purpose === "signup") await adoptTypedPassword(supabase, password);
   return { ok: true };
 }
 
@@ -1015,6 +1032,7 @@ export async function confirmPortalInvite(input: {
     if (checked === "signed-in") return acceptJoined(supabase, input.token, input.payload);
     return joinFail(notSignedInMessage(checked) ?? "That code didn’t match. Use the newest code we emailed you.");
   }
+  await adoptTypedPassword(supabase, input.password);
   return acceptJoined(supabase, input.token, input.payload);
 }
 
