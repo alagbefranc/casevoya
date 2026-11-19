@@ -97,7 +97,11 @@ async function firm() {
     SCOPE,
   ]);
   const matterId = made.rows[0].result.id;
+  // A portal login is linked by the database (20261118100000), never by a staff insert: the
+  // fixture adds these people as the database owner, still on the consultant's session.
+  await db.exec("reset role");
   await db.query(`insert into public.persons (organization_id, display_name, is_sample, user_id) values ($1, 'Synthetic applicant', true, $2)`, [orgId, client]);
+  await db.exec("set role authenticated");
   const person = await db.query<{ id: string }>(`select id from public.persons where organization_id = $1 and user_id = $2`, [orgId, client]);
   const applicant = person.rows[0].id;
   await db.query(`insert into public.matter_participants (organization_id, matter_id, person_id, role) values ($1, $2, $3, 'applicant')`, [orgId, matterId, applicant]);

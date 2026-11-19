@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SAME_ORIGIN_ERROR, isSameOriginMutation } from "@/lib/security/origin";
 import { admitToCall, validCall } from "@/modules/video/service";
 
 /**
@@ -6,6 +7,7 @@ import { admitToCall, validCall } from "@/modules/video/service";
  * Body: { organizationId, identity, admit }.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ ref: string }> }) {
+  if (!isSameOriginMutation(request)) return NextResponse.json({ error: SAME_ORIGIN_ERROR }, { status: 403 });
   const { ref } = await params;
   const body = (await request.json().catch(() => null)) as { organizationId?: unknown; identity?: unknown; admit?: unknown } | null;
   const organizationId = body?.organizationId;

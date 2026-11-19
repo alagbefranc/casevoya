@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SAME_ORIGIN_ERROR, isSameOriginMutation } from "@/lib/security/origin";
 import { safeAccessError } from "@/lib/auth/step-up";
 import { verifyTotpCode } from "@/lib/auth/verify-totp";
 import { licenceCheckInputSchema } from "@/modules/firm-onboarding";
@@ -9,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
  * register. This route does not request register.college-ic.ca.
  */
 export async function POST(request: Request) {
+  if (!isSameOriginMutation(request)) return NextResponse.json({ error: SAME_ORIGIN_ERROR }, { status: 403 });
   let body: unknown;
   try {
     body = await request.json();
