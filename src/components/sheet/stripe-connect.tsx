@@ -2,6 +2,7 @@
 
 import { goStepUp } from "@/lib/auth/step-up-resume";
 import { Fragment, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { loadConnectAndInitialize, type StripeConnectInstance } from "@stripe/connect-js/pure";
 import { ConnectAccountOnboarding, ConnectComponentsProvider, ConnectNotificationBanner } from "@stripe/react-connect-js";
@@ -18,9 +19,19 @@ const STRIPE_DIALOG_PARAM = "stripe";
 export const STRIPE_DISCONNECT_DIALOG = "dlgStripeOff";
 const STRIPE_DISCONNECT_PARAM = "stripe-disconnect";
 
+/**
+ * Stripe opens its own screens (document upload, address and ownership steps) as overlays on the
+ * page, with this z-index. They must sit above Casevoya's dialog (`.dlg-page`, z-index 200), which
+ * is why that dialog is an in-page layer and not a browser modal: a `showModal()` dialog is drawn
+ * in the top layer, above every z-index, and makes the rest of the page inert, so Stripe's
+ * screens opened behind it and could not be used.
+ */
+const STRIPE_OVERLAY_Z = 1000;
+
 const APPEARANCE = {
   overlays: "dialog" as const,
   variables: {
+    overlayZIndex: STRIPE_OVERLAY_Z,
     colorPrimary: "#0075DE",
     colorText: "#111111",
     colorDanger: "#c4382b",
@@ -57,7 +68,8 @@ function useStripeOnboarding(data: FinanceAccountData) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [opened, setOpened] = useState(false);
-  const dialog = useRef<HTMLDialogElement>(null);
+  // The dialog is on screen. `opened` stays true after the first open so Connect.js loads once.
+  const [shown, setShown] = useState(false);
   const ready = data.account?.cardPayments === "active";
   const needsMore = Boolean(data.account) && (!ready || (data.account?.requirementsDue ?? 0) > 0);
   const canFinish = data.configured && data.isOwner && needsMore && Boolean(data.publishableKey);
@@ -90,7 +102,7 @@ function useStripeOnboarding(data: FinanceAccountData) {
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
     const timer = window.setTimeout(() => {
       setOpened(true);
-      if (dialog.current && !dialog.current.open) dialog.current.showModal();
+      setShown(true);
     }, 300);
     return () => window.clearTimeout(timer);
   }, [canFinish]);
@@ -119,42 +131,71 @@ function useStripeOnboarding(data: FinanceAccountData) {
       router.refresh();
     });
 
-  return { error, pending, ready, needsMore, canFinish, instance, dialog, open: () => setOpened(true), create, settle };
+  const open = () => {
+    setOpened(true);
+    setShown(true);
+  };
+  const close = () => {
+    setShown(false);
+    settle();
+  };
+
+  return { error, pending, ready, needsMore, canFinish, instance, shown, open, close, create, settle };
 }
 
-function OnboardingDialog({
-  dialogRef,
-  instance,
-  onClose,
-}: {
-  dialogRef: React.RefObject<HTMLDialogElement | null>;
-  instance: StripeConnectInstance | null;
-  onClose: () => void;
-}) {
-  return (
-    <dialog className={"dlg"} id={STRIPE_DIALOG} aria-labelledby={`${STRIPE_DIALOG}H`} ref={dialogRef} onClose={onClose}>
-      <div className={"dh"}>
-        <h2 id={`${STRIPE_DIALOG}H`}>{"Finish with Stripe"}</h2>
-        <button className={"x"} type={"button"} aria-label={"Close"} data-close={STRIPE_DIALOG}>
-          <Icon name={"close"} cls={"ic s"} />
-        </button>
-      </div>
-      <div className={"db"}>
-        {instance ? (
-          <ConnectComponentsProvider connectInstance={instance}>
-            <ConnectNotificationBanner />
-            <ConnectAccountOnboarding onExit={() => dialogRef.current?.close()} />
-          </ConnectComponentsProvider>
-        ) : (
-          <small className={"hint"}>{"Loading Stripe…"}</small>
-        )}
-      </div>
-      <div className={"df"}>
-        <button className={"btn"} type={"button"} data-close={STRIPE_DIALOG}>
-          {"Close"}
-        </button>
-      </div>
-    </dialog>
+/**
+ * The Designer's `.dlg` as an in-page layer (see STRIPE_OVERLAY_Z): rendered on `document.body`
+ * while shown, with its own shade, Escape to close and the page behind kept from scrolling.
+ */
+function OnboardingDialog({ shown, instance, onClose }: { shown: boolean; instance: StripeConnectInstance | null; onClose: () => void }) {
+  const box = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  useEffect(() => {
+    if (!shown) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    box.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [shown]);
+
+  if (!shown || typeof document === "undefined") return null;
+  return createPortal(
+    <div className={"dlg-page"}>
+      <dialog className={"dlg"} id={STRIPE_DIALOG} aria-labelledby={`${STRIPE_DIALOG}H`} aria-modal={"true"} tabIndex={-1} ref={box} open>
+        <div className={"dh"}>
+          <h2 id={`${STRIPE_DIALOG}H`}>{"Finish with Stripe"}</h2>
+          <button className={"x"} type={"button"} aria-label={"Close"} onClick={onClose}>
+            <Icon name={"close"} cls={"ic s"} />
+          </button>
+        </div>
+        <div className={"db"}>
+          {instance ? (
+            <ConnectComponentsProvider connectInstance={instance}>
+              <ConnectNotificationBanner />
+              <ConnectAccountOnboarding onExit={onClose} />
+            </ConnectComponentsProvider>
+          ) : (
+            <small className={"hint"}>{"Loading Stripe…"}</small>
+          )}
+        </div>
+        <div className={"df"}>
+          <button className={"btn"} type={"button"} onClick={onClose}>
+            {"Close"}
+          </button>
+        </div>
+      </dialog>
+    </div>,
+    document.body,
   );
 }
 
@@ -169,7 +210,7 @@ function OnboardingDialog({
  * own page. Test or live, as the server runs Stripe (data.live).
  */
 export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
-  const { error, pending, ready, needsMore, canFinish, instance, dialog, open, create, settle } = useStripeOnboarding(data);
+  const { error, pending, ready, needsMore, canFinish, instance, shown, open, close, create } = useStripeOnboarding(data);
   const live = data.live === true;
 
   if (!data.canBill) return null;
@@ -235,7 +276,7 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
         icon={"bank"}
         title={"Stripe needs more information"}
         action={
-          <button className={"btn p sm"} type={"button"} data-dlg={STRIPE_DIALOG} onClick={open} disabled={pending} aria-busy={pending || undefined}>
+          <button className={"btn p sm"} type={"button"} onClick={open} disabled={pending} aria-busy={pending || undefined}>
             {"Finish with Stripe"}
           </button>
         }
@@ -249,7 +290,7 @@ export function StripeAccountStatus({ data }: { data: FinanceAccountData }) {
           {error}
         </Banner>
       ) : null}
-      <OnboardingDialog dialogRef={dialog} instance={instance} onClose={settle} />
+      <OnboardingDialog shown={shown} instance={instance} onClose={close} />
     </>
   );
 }
@@ -403,7 +444,7 @@ const STILL_NEEDS = "Stripe still needs";
  * Stripe's form) and Check with Stripe.
  */
 export function StripeConnectCard({ data, card, index }: { data: FinanceAccountData; card: ConnectCardData; index: number }) {
-  const { error, pending, canFinish, instance, dialog, open, create, settle } = useStripeOnboarding(data);
+  const { error, pending, canFinish, instance, shown, open, close, create, settle } = useStripeOnboarding(data);
   return (
     <>
       <section className={"panel rv"} style={{ "--i": String(index) } as React.CSSProperties} id={"card-payments"} aria-label={"Card payments from clients"}>
@@ -446,7 +487,6 @@ export function StripeConnectCard({ data, card, index }: { data: FinanceAccountD
                     key={action.act}
                     className={action.primary ? "btn p sm" : "btn sm"}
                     type={"button"}
-                    data-dlg={STRIPE_DIALOG}
                     onClick={open}
                     disabled={pending || !canFinish}
                     aria-busy={pending || undefined}
@@ -483,7 +523,7 @@ export function StripeConnectCard({ data, card, index }: { data: FinanceAccountD
         <Icon name={"info"} cls={"ic s"} />
         {` ${card.note}`}
       </p>
-      {canFinish ? <OnboardingDialog dialogRef={dialog} instance={instance} onClose={settle} /> : null}
+      {canFinish ? <OnboardingDialog shown={shown} instance={instance} onClose={close} /> : null}
       {data.isOwner && card.actions.some((action) => action.act === "disconnect") ? <DisconnectDialog data={data} /> : null}
     </>
   );

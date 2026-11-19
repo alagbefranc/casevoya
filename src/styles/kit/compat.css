@@ -64,3 +64,10 @@
    Inside a label the tag is inline text again, as on the Designer's form pages. */
 label .opt,.check .opt{display:inline;width:auto;padding:0;border:0;border-radius:0;background:none;transition:none;text-align:inherit}
 label .opt:hover{border-color:transparent}label .opt:active{transform:none}
+
+/* A .dlg shown as an in-page layer, not a browser modal (stripe-connect.tsx): Stripe's embedded
+   onboarding opens its own screens on the page, which a top-layer dialog would cover and block. */
+.dlg-page{position:fixed;inset:0;z-index:200;display:flex;padding:16px;overflow:auto;background:rgba(17,17,17,.36);animation:fade 220ms var(--ease)}
+.dlg-page>dialog.dlg{position:relative;inset:auto;flex:none}
+@media (max-width:600px){.dlg-page{padding:0}}
+@media (prefers-reduced-motion:reduce){.dlg-page{animation:none}}
